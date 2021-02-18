@@ -11,6 +11,11 @@ import (
 func main() {
 	var reader *bufio.Reader
 	fmt.Println(PrintData(reader))
+
+	err := FileCreate("error-handling/test.txt", "Hello there\n")
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 func PrintData(reader *bufio.Reader) (err error) {
@@ -29,4 +34,15 @@ func PrintData(reader *bufio.Reader) (err error) {
 	fmt.Println(data)
 
 	return nil
+}
+
+func FileCreate(path string, content string) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(content)
+	return err
 }
