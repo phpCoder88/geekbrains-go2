@@ -15,13 +15,14 @@ func main() {
 	err := FileCreate("error-handling/test.txt", "Hello there\n")
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
 }
 
 func PrintData(reader *bufio.Reader) (err error) {
 	defer func() {
 		if errFromPanic := recover(); errFromPanic != nil {
-			fmt.Fprintln(os.Stderr, errFromPanic)
+			_, _ = fmt.Fprintln(os.Stderr, errFromPanic)
 			err = myerrors.NewErrorWithTime("nil pointer exception")
 			return
 		}
