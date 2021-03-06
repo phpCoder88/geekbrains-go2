@@ -16,9 +16,8 @@ func channelCounter(workerCount int, jobCount int) int {
 
 	jobs := make(chan struct{})
 	inc := make(chan struct{}, jobCount)
-	wg := &sync.WaitGroup{}
-	worker := func(wg *sync.WaitGroup) {
-		defer wg.Done()
+
+	worker := func() {
 		for range jobs {
 			inc <- struct{}{}
 		}
@@ -31,16 +30,16 @@ func channelCounter(workerCount int, jobCount int) int {
 	}
 
 	for w := 1; w <= workerCount; w++ {
-		wg.Add(1)
-		go worker(wg)
+		go worker()
 	}
 	go jobMaker()
 
-	wg.Wait()
-	close(inc)
-
 	for range inc {
 		counter++
+
+		if counter == jobCount {
+			close(inc)
+		}
 	}
 
 	return counter
