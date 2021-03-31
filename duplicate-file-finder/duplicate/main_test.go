@@ -9,6 +9,8 @@ import (
 	"sort"
 	"testing"
 	"text/tabwriter"
+
+	"go.uber.org/zap"
 )
 
 var tests = []struct {
@@ -69,9 +71,17 @@ var tests = []struct {
 }
 
 func TestDuplicates_Seek(t *testing.T) {
+	logger, _ := zap.NewProduction()
+	defer func() {
+		err := logger.Sync()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, files, tearDown := newTestFiles(t, tt.maxDepth)
+			_, files, tearDown := newTestFiles(t, logger, tt.maxDepth)
 			defer tearDown()
 
 			if !reflect.DeepEqual(files, tt.wantResult) {
@@ -82,9 +92,17 @@ func TestDuplicates_Seek(t *testing.T) {
 }
 
 func TestDuplicates_PrintDuplicates(t *testing.T) {
+	logger, _ := zap.NewProduction()
+	defer func() {
+		err := logger.Sync()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			finder, _, tearDown := newTestFiles(t, tt.maxDepth)
+			finder, _, tearDown := newTestFiles(t, logger, tt.maxDepth)
 			defer tearDown()
 
 			out := new(bytes.Buffer)
@@ -100,9 +118,17 @@ func TestDuplicates_PrintDuplicates(t *testing.T) {
 }
 
 func TestDuplicates_RemoveAllDuplicates(t *testing.T) {
+	logger, _ := zap.NewProduction()
+	defer func() {
+		err := logger.Sync()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			finder, _, tearDown := newTestFiles(t, tt.maxDepth)
+			finder, _, tearDown := newTestFiles(t, logger, tt.maxDepth)
 			defer tearDown()
 
 			finder.RemoveAllDuplicates()
@@ -123,7 +149,7 @@ func TestDuplicates_RemoveAllDuplicates(t *testing.T) {
 
 }
 
-func newTestFiles(t *testing.T, maxDepth int) (*Duplicates, Files, func()) {
+func newTestFiles(t *testing.T, logger *zap.Logger, maxDepth int) (*Duplicates, Files, func()) {
 	var files = []struct {
 		path    string
 		content string
@@ -152,7 +178,7 @@ func newTestFiles(t *testing.T, maxDepth int) (*Duplicates, Files, func()) {
 		_ = file.Close()
 	}
 
-	finder := NewDuplicateFinder()
+	finder := NewDuplicateFinder(logger)
 	dFiles := finder.Seek("./tmp", maxDepth)
 
 	return finder, dFiles, func() {

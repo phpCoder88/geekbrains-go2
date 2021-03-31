@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"sync"
 	"text/tabwriter"
+
+	"go.uber.org/zap"
 )
 
 // File описывает единичный файл в поиске
@@ -28,12 +29,14 @@ type Duplicates struct {
 	sync.Mutex
 	files Files
 	sync.WaitGroup
+	logger *zap.Logger
 }
 
 // NewDuplicateFinder инициализирует поиск
-func NewDuplicateFinder() *Duplicates {
+func NewDuplicateFinder(logger *zap.Logger) *Duplicates {
 	return &Duplicates{
-		files: make(Files),
+		files:  make(Files),
+		logger: logger,
 	}
 }
 
@@ -52,8 +55,11 @@ func (f *Duplicates) Seek(path string, maxDepth int) Files {
 // scanDir рекурсивно сканирует директории в поисках дубликатов
 func (f *Duplicates) scanDir(path string, maxDepth int, level int) {
 	defer f.Done()
+
+	f.logger.Info("Start scanning dir " + path)
 	list, err := ioutil.ReadDir(path)
 	if err != nil {
+		f.logger.Error("Can't read dir " + path)
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return
 	}
@@ -101,9 +107,10 @@ func (f *Duplicates) removeFileDuplicates(fileSetKey string) {
 
 	for fileInd, file := range files {
 		if fileInd != 0 {
+			f.logger.Info("Removing file " + file.Path)
 			err := os.Remove(file.Path)
-			log.Printf("Removing file %s\n", file.Path)
 			if err != nil {
+				f.logger.Error("Removing file " + file.Path)
 				_, _ = fmt.Fprintln(os.Stderr, err)
 			}
 		}

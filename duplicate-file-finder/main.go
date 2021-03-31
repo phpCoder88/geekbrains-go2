@@ -4,9 +4,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strings"
+
+	"go.uber.org/zap"
 
 	"github.com/phpCoder88/geekbrains-go2/duplicate-file-finder/duplicate"
 )
@@ -18,10 +19,21 @@ var maxDepth = flag.Int("maxdepth", 0, "максимальная глубина 
 func main() {
 	flag.Parse()
 
-	finder := duplicate.NewDuplicateFinder()
+	logger, _ := zap.NewProduction()
+	defer func() {
+		err := logger.Sync()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
 
+	logger = logger.With(zap.String("startSearchingDir", *startDir)).With(zap.Int("searchingDepth", *maxDepth)).With(zap.Bool("isRemove", *isRemove))
+
+	finder := duplicate.NewDuplicateFinder(logger)
+	logger.Info("Start searching...")
 	files := finder.Seek(*startDir, *maxDepth)
 
+	logger.Info("Printing searched results...")
 	finder.PrintDuplicates(os.Stdout)
 
 	if *isRemove && len(files) > 0 {
@@ -29,6 +41,7 @@ func main() {
 		fmt.Print("Удалить дубликаты(Y/n): ")
 		_, err := fmt.Scanln(&removeConfirm)
 		if err != nil {
+			logger.Error("Can't scan removing confirm message")
 			_, _ = fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -38,7 +51,7 @@ func main() {
 			return
 		}
 
-		log.Println("Removing...")
+		logger.Info("Removing files...")
 		finder.RemoveAllDuplicates()
 	}
 }
