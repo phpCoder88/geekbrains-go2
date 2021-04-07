@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"reflect"
 	"sort"
 	"testing"
 	"text/tabwriter"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var tests = []struct {
@@ -71,7 +73,7 @@ var tests = []struct {
 }
 
 func TestDuplicates_Seek(t *testing.T) {
-	logger, _ := zap.NewProduction()
+	logger := zaptest.NewLogger(t)
 	defer func() {
 		err := logger.Sync()
 		if err != nil {
@@ -84,15 +86,13 @@ func TestDuplicates_Seek(t *testing.T) {
 			_, files, tearDown := newTestFiles(t, logger, tt.maxDepth)
 			defer tearDown()
 
-			if !reflect.DeepEqual(files, tt.wantResult) {
-				t.Errorf("test Failed - results not match\nGot:\n%v\nExpected:\n%v", files, tt.wantResult)
-			}
+			assert.Equal(t, tt.wantResult, files)
 		})
 	}
 }
 
 func TestDuplicates_PrintDuplicates(t *testing.T) {
-	logger, _ := zap.NewProduction()
+	logger := zaptest.NewLogger(t)
 	defer func() {
 		err := logger.Sync()
 		if err != nil {
@@ -110,15 +110,14 @@ func TestDuplicates_PrintDuplicates(t *testing.T) {
 			result := out.String()
 
 			wantResult := printedResult(tt.wantResult)
-			if result != wantResult {
-				t.Errorf("test Failed - results not match\nGot:\n%v\nExpected:\n%v", result, wantResult)
-			}
+			assert.Equal(t, wantResult, result)
 		})
 	}
 }
 
 func TestDuplicates_RemoveAllDuplicates(t *testing.T) {
-	logger, _ := zap.NewProduction()
+	logger := zaptest.NewLogger(t)
+
 	defer func() {
 		err := logger.Sync()
 		if err != nil {
@@ -134,19 +133,14 @@ func TestDuplicates_RemoveAllDuplicates(t *testing.T) {
 			finder.RemoveAllDuplicates()
 
 			for _, filePath := range tt.wantDeletedFiles {
-				if _, err := os.Stat(filePath); err == nil {
-					t.Fatalf("test Failed - File %s was not deleted\n", filePath)
-				}
+				assert.NoFileExists(t, filePath)
 			}
 
 			for _, filePath := range tt.wantPresentFiles {
-				if _, err := os.Stat(filePath); os.IsNotExist(err) {
-					t.Fatalf("test Failed - File %s was deleted\n", filePath)
-				}
+				assert.FileExists(t, filePath)
 			}
 		})
 	}
-
 }
 
 func newTestFiles(t *testing.T, logger *zap.Logger, maxDepth int) (*Duplicates, Files, func()) {
