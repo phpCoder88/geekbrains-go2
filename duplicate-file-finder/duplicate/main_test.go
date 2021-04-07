@@ -2,28 +2,28 @@ package duplicate
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"path"
-	"sort"
 	"testing"
-	"text/tabwriter"
-
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap/zaptest"
+
+	"github.com/stretchr/testify/suite"
 )
 
 var tests = []struct {
 	name             string
+	startDir         string
 	maxDepth         int
 	wantResult       Files
 	wantDeletedFiles []string
 	wantPresentFiles []string
+	wantPrinted      string
 }{
 	{
 		name:     "Max Depth 0",
+		startDir: "./tmp",
 		maxDepth: 0,
 		wantResult: Files{
 			"copy1.txt_28": []File{
@@ -45,10 +45,18 @@ var tests = []struct {
 			"tmp/unique.txt",
 			"tmp/A/AB/copy1.txt",
 		},
+		wantPrinted: `   File Name|            File Path|   File Size|
+   copy1.txt|        tmp/copy1.txt|          28|
+   copy1.txt|      tmp/A/copy1.txt|          28|
+   copy1.txt|   tmp/A/AA/copy1.txt|          28|
+   copy2.txt|        tmp/copy2.txt|          28|
+   copy2.txt|      tmp/B/copy2.txt|          28|
+`,
 	},
 
 	{
 		name:     "Max Depth 2",
+		startDir: "./tmp",
 		maxDepth: 2,
 		wantResult: Files{
 			"copy1.txt_28": []File{
@@ -69,81 +77,21 @@ var tests = []struct {
 			"tmp/A/AA/copy1.txt",
 			"tmp/A/AB/copy1.txt",
 		},
+		wantPrinted: `   File Name|         File Path|   File Size|
+   copy1.txt|     tmp/copy1.txt|          28|
+   copy1.txt|   tmp/A/copy1.txt|          28|
+   copy2.txt|     tmp/copy2.txt|          28|
+   copy2.txt|   tmp/B/copy2.txt|          28|
+`,
 	},
 }
 
-func TestDuplicates_Seek(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	defer func() {
-		err := logger.Sync()
-		if err != nil {
-			fmt.Println(err)
-		}
-	}()
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, files, tearDown := newTestFiles(t, logger, tt.maxDepth)
-			defer tearDown()
-
-			assert.Equal(t, tt.wantResult, files)
-		})
-	}
+type DuplicatesTestSuite struct {
+	suite.Suite
+	finder *Duplicates
 }
 
-func TestDuplicates_PrintDuplicates(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	defer func() {
-		err := logger.Sync()
-		if err != nil {
-			fmt.Println(err)
-		}
-	}()
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			finder, _, tearDown := newTestFiles(t, logger, tt.maxDepth)
-			defer tearDown()
-
-			out := new(bytes.Buffer)
-			finder.PrintDuplicates(out)
-			result := out.String()
-
-			wantResult := printedResult(tt.wantResult)
-			assert.Equal(t, wantResult, result)
-		})
-	}
-}
-
-func TestDuplicates_RemoveAllDuplicates(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-
-	defer func() {
-		err := logger.Sync()
-		if err != nil {
-			fmt.Println(err)
-		}
-	}()
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			finder, _, tearDown := newTestFiles(t, logger, tt.maxDepth)
-			defer tearDown()
-
-			finder.RemoveAllDuplicates()
-
-			for _, filePath := range tt.wantDeletedFiles {
-				assert.NoFileExists(t, filePath)
-			}
-
-			for _, filePath := range tt.wantPresentFiles {
-				assert.FileExists(t, filePath)
-			}
-		})
-	}
-}
-
-func newTestFiles(t *testing.T, logger *zap.Logger, maxDepth int) (*Duplicates, Files, func()) {
+func (s *DuplicatesTestSuite) SetupTest() {
 	var files = []struct {
 		path    string
 		content string
@@ -160,47 +108,101 @@ func newTestFiles(t *testing.T, logger *zap.Logger, maxDepth int) (*Duplicates, 
 	for _, fileItem := range files {
 		err := os.MkdirAll(path.Dir(fileItem.path), 0755)
 		if err != nil {
-			t.Fatal(err)
+			s.T().Fatal(err)
 		}
 
 		file, err := os.Create(fileItem.path)
 		if err != nil {
-			t.Fatal(err)
+			s.T().Fatal(err)
 		}
 
 		_, _ = file.WriteString(fileItem.content)
 		_ = file.Close()
 	}
+	logger := zaptest.NewLogger(s.T())
+	s.finder = NewDuplicateFinder(logger)
+}
 
-	finder := NewDuplicateFinder(logger)
-	dFiles := finder.Seek("./tmp", maxDepth)
-
-	return finder, dFiles, func() {
-		err := os.RemoveAll("./tmp")
-		if err != nil {
-			t.Fatal(err)
-		}
+func (s *DuplicatesTestSuite) TearDownTest() {
+	err := os.RemoveAll("./tmp")
+	if err != nil {
+		s.T().Fatal(err)
 	}
 }
 
-func printedResult(wantResult Files) string {
-	out := new(bytes.Buffer)
+func (s *DuplicatesTestSuite) TestDuplicatesSeek() {
+	tt := tests[0]
+	s.T().Run(tt.name, func(t *testing.T) {
+		dFiles := s.finder.Seek(tt.startDir, tt.maxDepth)
+		assert.Equal(t, tt.wantResult, dFiles)
+	})
+}
 
-	w := tabwriter.NewWriter(out, 0, 0, 3, ' ', tabwriter.AlignRight|tabwriter.Debug)
-	_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t\n", "File Name", "File Path", "File Size")
+func (s *DuplicatesTestSuite) TestDuplicatesSeek_Depth2() {
+	tt := tests[1]
+	s.T().Run(tt.name, func(t *testing.T) {
+		dFiles := s.finder.Seek(tt.startDir, tt.maxDepth)
+		assert.Equal(t, tt.wantResult, dFiles)
+	})
+}
 
-	keys := make([]string, 0, len(wantResult))
-	for k := range wantResult {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+func (s *DuplicatesTestSuite) TestPrintDuplicates() {
+	tt := tests[0]
+	s.T().Run(tt.name, func(t *testing.T) {
+		_ = s.finder.Seek(tt.startDir, tt.maxDepth)
 
-	for _, key := range keys {
-		for _, file := range wantResult[key] {
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t\n", file.Name, file.Path, file.Size)
+		out := new(bytes.Buffer)
+		s.finder.PrintDuplicates(out)
+		result := out.String()
+		assert.Equal(t, tt.wantPrinted, result)
+	})
+}
+
+func (s *DuplicatesTestSuite) TestPrintDuplicates_Depth2() {
+	tt := tests[1]
+	s.T().Run(tt.name, func(t *testing.T) {
+		_ = s.finder.Seek(tt.startDir, tt.maxDepth)
+
+		out := new(bytes.Buffer)
+		s.finder.PrintDuplicates(out)
+		result := out.String()
+
+		assert.Equal(t, tt.wantPrinted, result)
+	})
+}
+
+func (s *DuplicatesTestSuite) TestRemoveAllDuplicates() {
+	tt := tests[0]
+	s.T().Run(tt.name, func(t *testing.T) {
+		_ = s.finder.Seek(tt.startDir, tt.maxDepth)
+		s.finder.RemoveAllDuplicates()
+
+		for _, filePath := range tt.wantDeletedFiles {
+			assert.NoFileExists(t, filePath)
 		}
-	}
-	_ = w.Flush()
 
-	return out.String()
+		for _, filePath := range tt.wantPresentFiles {
+			assert.FileExists(t, filePath)
+		}
+	})
+}
+
+func (s *DuplicatesTestSuite) TestRemoveAllDuplicates_Depth2() {
+	tt := tests[1]
+	s.T().Run(tt.name, func(t *testing.T) {
+		_ = s.finder.Seek(tt.startDir, tt.maxDepth)
+		s.finder.RemoveAllDuplicates()
+
+		for _, filePath := range tt.wantDeletedFiles {
+			assert.NoFileExists(t, filePath)
+		}
+
+		for _, filePath := range tt.wantPresentFiles {
+			assert.FileExists(t, filePath)
+		}
+	})
+}
+
+func TestExampleTestSuite(t *testing.T) {
+	suite.Run(t, new(DuplicatesTestSuite))
 }
