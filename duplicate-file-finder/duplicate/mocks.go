@@ -3,7 +3,7 @@ package duplicate
 import (
 	"errors"
 	"fmt"
-	"io/fs"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -52,9 +52,9 @@ func NewFileSystemMock(fileSystem FileSystemStruct) *FileSystemMock {
 }
 
 // ReadDir читает содержимое директории в FileSystemMock
-func (dr *FileSystemMock) ReadDir(path string) ([]fs.FileInfo, error) {
+func (dr *FileSystemMock) ReadDir(path string) ([]os.FileInfo, error) {
 	if fileInfos, ok := dr.fileSystem[path]; ok {
-		files := make([]fs.FileInfo, len(fileInfos))
+		files := make([]os.FileInfo, len(fileInfos))
 
 		var i int
 		for _, file := range fileInfos {
@@ -87,7 +87,7 @@ func (dr *FileSystemMock) Remove(path string) error {
 // FileInfoMock описывает мок файла
 type FileInfoMock struct {
 	name     string
-	mode     fs.FileMode
+	mode     os.FileMode
 	modeTime time.Time
 	isDir    bool
 	content  string
@@ -104,7 +104,7 @@ func (f FileInfoMock) Size() int64 {
 }
 
 // Mode возвращает размер файла
-func (f FileInfoMock) Mode() fs.FileMode {
+func (f FileInfoMock) Mode() os.FileMode {
 	return f.mode
 }
 

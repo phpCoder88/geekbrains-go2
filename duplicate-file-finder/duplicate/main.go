@@ -4,7 +4,6 @@ package duplicate
 import (
 	"fmt"
 	"io"
-	"io/fs"
 	"io/ioutil"
 	"os"
 	"path"
@@ -18,7 +17,7 @@ import (
 
 // FSReader описывает чтение директории
 type FSReader interface {
-	ReadDir(path string) ([]fs.FileInfo, error)
+	ReadDir(path string) ([]os.FileInfo, error)
 }
 
 // FSDeleter описывает удаление файла
@@ -36,7 +35,7 @@ type FSReadDeleter interface {
 type FileSystem struct{}
 
 // ReadDir читает содержимое указанной директории
-func (dr FileSystem) ReadDir(path string) ([]fs.FileInfo, error) {
+func (dr FileSystem) ReadDir(path string) ([]os.FileInfo, error) {
 	return ioutil.ReadDir(path)
 }
 
