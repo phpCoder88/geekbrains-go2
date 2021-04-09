@@ -4,8 +4,10 @@ package duplicate
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -13,6 +15,35 @@ import (
 
 	"go.uber.org/zap"
 )
+
+// FSReader описывает чтение директории
+type FSReader interface {
+	ReadDir(path string) ([]fs.FileInfo, error)
+}
+
+// FSDeleter описывает удаление файла
+type FSDeleter interface {
+	Remove(name string) error
+}
+
+// FSReadDeleter описывает чтение директории и удаление файла
+type FSReadDeleter interface {
+	FSReader
+	FSDeleter
+}
+
+// FileSystem представляет работу с файловой системой
+type FileSystem struct{}
+
+// ReadDir читает содержимое указанной директории
+func (dr FileSystem) ReadDir(path string) ([]fs.FileInfo, error) {
+	return ioutil.ReadDir(path)
+}
+
+// Remove удаляет файл по указанному пути
+func (dr FileSystem) Remove(name string) error {
+	return os.Remove(name)
+}
 
 // File описывает единичный файл в поиске
 type File struct {
@@ -26,6 +57,7 @@ type Files map[string][]File
 
 // Duplicates управляет поиском дубликатов
 type Duplicates struct {
+	fs FSReadDeleter
 	sync.Mutex
 	files Files
 	sync.WaitGroup
@@ -33,33 +65,34 @@ type Duplicates struct {
 }
 
 // NewDuplicateFinder инициализирует поиск
-func NewDuplicateFinder(logger *zap.Logger) *Duplicates {
+func NewDuplicateFinder(fs FSReadDeleter, logger *zap.Logger) *Duplicates {
 	return &Duplicates{
+		fs:     fs,
 		files:  make(Files),
 		logger: logger,
 	}
 }
 
 // Seek ищет дубликаты файлов
-func (f *Duplicates) Seek(path string, maxDepth int) Files {
-	f.Add(1)
-	go f.scanDir(path, maxDepth, 1)
+func (d *Duplicates) Seek(startPath string, maxDepth int) Files {
+	d.Add(1)
+	go d.scanDir(path.Clean(startPath), maxDepth, 1)
 
-	f.Wait()
+	d.Wait()
 
-	f.filterFiles()
+	d.filterFiles()
 
-	return f.files
+	return d.files
 }
 
 // scanDir рекурсивно сканирует директории в поисках дубликатов
-func (f *Duplicates) scanDir(path string, maxDepth int, level int) {
-	defer f.Done()
+func (d *Duplicates) scanDir(path string, maxDepth int, level int) {
+	defer d.Done()
 
-	f.logger.Info("Start scanning dir " + path)
-	list, err := ioutil.ReadDir(path)
+	d.logger.Info("Start scanning dir " + path)
+	list, err := d.fs.ReadDir(path)
 	if err != nil {
-		f.logger.Error("Can't read dir " + path)
+		d.logger.Error("Can't read dir " + path)
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return
 	}
@@ -69,48 +102,48 @@ func (f *Duplicates) scanDir(path string, maxDepth int, level int) {
 
 		if val.IsDir() {
 			if maxDepth <= 0 || level < maxDepth {
-				f.Add(1)
-				go f.scanDir(currPath, maxDepth, level+1)
+				d.Add(1)
+				go d.scanDir(currPath, maxDepth, level+1)
 			}
 			continue
 		}
 
 		fileToken := fmt.Sprintf("%s_%d", val.Name(), val.Size())
-		f.Lock()
-		f.files[fileToken] = append(f.files[fileToken], File{
+		d.Lock()
+		d.files[fileToken] = append(d.files[fileToken], File{
 			Name: val.Name(),
 			Path: currPath,
 			Size: val.Size(),
 		})
-		f.Unlock()
+		d.Unlock()
 	}
 }
 
 // RemoveAllDuplicates удаляет все дубликаты файлов
-func (f *Duplicates) RemoveAllDuplicates() {
-	for fileSetKey := range f.files {
-		f.Add(1)
-		go f.removeFileDuplicates(fileSetKey)
+func (d *Duplicates) RemoveAllDuplicates() {
+	for fileSetKey := range d.files {
+		d.Add(1)
+		go d.removeFileDuplicates(fileSetKey)
 	}
 
-	f.Wait()
+	d.Wait()
 }
 
 // removeFileDuplicates удаляет дубликаты одного файла
-func (f *Duplicates) removeFileDuplicates(fileSetKey string) {
-	defer f.Done()
+func (d *Duplicates) removeFileDuplicates(fileSetKey string) {
+	defer d.Done()
 
-	files, ok := f.files[fileSetKey]
+	files, ok := d.files[fileSetKey]
 	if !ok {
 		return
 	}
 
 	for fileInd, file := range files {
 		if fileInd != 0 {
-			f.logger.Info("Removing file " + file.Path)
-			err := os.Remove(file.Path)
+			d.logger.Info("Removing file " + file.Path)
+			err := d.fs.Remove(file.Path)
 			if err != nil {
-				f.logger.Error("Removing file " + file.Path)
+				d.logger.Error("Removing file " + file.Path)
 				_, _ = fmt.Fprintln(os.Stderr, err)
 			}
 		}
@@ -118,10 +151,10 @@ func (f *Duplicates) removeFileDuplicates(fileSetKey string) {
 }
 
 // filterFiles фильтрует найденные файлы и сортирует дубликаты
-func (f *Duplicates) filterFiles() {
-	for ind, dFiles := range f.files {
+func (d *Duplicates) filterFiles() {
+	for ind, dFiles := range d.files {
 		if len(dFiles) < 2 {
-			delete(f.files, ind)
+			delete(d.files, ind)
 			continue
 		}
 
@@ -130,22 +163,22 @@ func (f *Duplicates) filterFiles() {
 }
 
 // PrintDuplicates Вывод найденных дубликатов
-func (f *Duplicates) PrintDuplicates(out io.Writer) {
-	if len(f.files) == 0 {
+func (d *Duplicates) PrintDuplicates(out io.Writer) {
+	if len(d.files) == 0 {
 		return
 	}
 
 	w := tabwriter.NewWriter(out, 0, 0, 3, ' ', tabwriter.AlignRight|tabwriter.Debug)
 	_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t\n", "File Name", "File Path", "File Size")
 
-	keys := make([]string, 0, len(f.files))
-	for k := range f.files {
+	keys := make([]string, 0, len(d.files))
+	for k := range d.files {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
 	for _, key := range keys {
-		for _, file := range f.files[key] {
+		for _, file := range d.files[key] {
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t\n", file.Name, file.Path, file.Size)
 		}
 	}

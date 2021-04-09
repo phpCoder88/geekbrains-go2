@@ -29,7 +29,8 @@ func main() {
 
 	logger = logger.With(zap.String("startSearchingDir", *startDir)).With(zap.Int("searchingDepth", *maxDepth)).With(zap.Bool("isRemove", *isRemove))
 
-	finder := duplicate.NewDuplicateFinder(logger)
+	fs := &duplicate.FileSystem{}
+	finder := duplicate.NewDuplicateFinder(fs, logger)
 	logger.Info("Start searching...")
 	files := finder.Seek(*startDir, *maxDepth)
 
