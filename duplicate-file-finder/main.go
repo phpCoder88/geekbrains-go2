@@ -27,7 +27,9 @@ func main() {
 		}
 	}()
 
-	logger = logger.With(zap.String("startSearchingDir", *startDir)).With(zap.Int("searchingDepth", *maxDepth)).With(zap.Bool("isRemove", *isRemove))
+	logger = logger.With(zap.String("startSearchingDir", *startDir))
+	logger = logger.With(zap.Int("searchingDepth", *maxDepth))
+	logger = logger.With(zap.Bool("isRemove", *isRemove))
 
 	fs := &duplicate.FileSystem{}
 	finder := duplicate.NewDuplicateFinder(fs, logger)
@@ -44,7 +46,7 @@ func main() {
 		if err != nil {
 			logger.Error("Can't scan removing confirm message")
 			_, _ = fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return
 		}
 
 		removeConfirm = strings.ToLower(strings.TrimSpace(removeConfirm))

@@ -59,50 +59,50 @@ func (s *RealDuplicateFilesTestSuite) TearDownTest() {
 }
 
 func (s *RealDuplicateFilesTestSuite) TestDuplicatesSeek() {
-	for ind, tt := range tests {
+	for ind, tt := range FilesTestData {
 		if ind != 0 {
 			s.SetupTest()
 		}
 
-		s.T().Run(tt.name, func(t *testing.T) {
-			dFiles := s.finder.Seek(tt.startDir, tt.maxDepth)
-			assert.Equal(t, tt.wantResult, dFiles)
+		s.T().Run(tt.Name, func(t *testing.T) {
+			dFiles := s.finder.Seek(tt.StartDir, tt.MaxDepth)
+			assert.Equal(t, tt.WantResult, dFiles)
 		})
 	}
 }
 
 func (s *RealDuplicateFilesTestSuite) TestPrintDuplicates() {
-	for ind, tt := range tests {
+	for ind, tt := range FilesTestData {
 		if ind != 0 {
 			s.SetupTest()
 		}
 
-		s.T().Run(tt.name, func(t *testing.T) {
-			_ = s.finder.Seek(tt.startDir, tt.maxDepth)
+		s.T().Run(tt.Name, func(t *testing.T) {
+			_ = s.finder.Seek(tt.StartDir, tt.MaxDepth)
 
 			out := new(bytes.Buffer)
 			s.finder.PrintDuplicates(out)
 			result := out.String()
-			assert.Equal(t, tt.wantPrinted, result)
+			assert.Equal(t, tt.WantPrinted, result)
 		})
 	}
 }
 
 func (s *RealDuplicateFilesTestSuite) TestRemoveAllDuplicates() {
-	for ind, tt := range tests {
+	for ind, tt := range FilesTestData {
 		if ind != 0 {
 			s.SetupTest()
 		}
 
-		s.T().Run(tt.name, func(t *testing.T) {
-			_ = s.finder.Seek(tt.startDir, tt.maxDepth)
+		s.T().Run(tt.Name, func(t *testing.T) {
+			_ = s.finder.Seek(tt.StartDir, tt.MaxDepth)
 			s.finder.RemoveAllDuplicates()
 
-			for _, filePath := range tt.wantDeletedFiles {
+			for _, filePath := range tt.WantDeletedFiles {
 				assert.NoFileExists(t, filePath)
 			}
 
-			for _, filePath := range tt.wantPresentFiles {
+			for _, filePath := range tt.WantPresentFiles {
 				assert.FileExists(t, filePath)
 			}
 		})

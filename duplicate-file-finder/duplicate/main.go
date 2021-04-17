@@ -35,8 +35,8 @@ type FSReadDeleter interface {
 type FileSystem struct{}
 
 // ReadDir читает содержимое указанной директории
-func (dr FileSystem) ReadDir(path string) ([]os.FileInfo, error) {
-	return ioutil.ReadDir(path)
+func (dr FileSystem) ReadDir(dirPath string) ([]os.FileInfo, error) {
+	return ioutil.ReadDir(dirPath)
 }
 
 // Remove удаляет файл по указанному пути
@@ -85,19 +85,19 @@ func (d *Duplicates) Seek(startPath string, maxDepth int) Files {
 }
 
 // scanDir рекурсивно сканирует директории в поисках дубликатов
-func (d *Duplicates) scanDir(path string, maxDepth int, level int) {
+func (d *Duplicates) scanDir(dirPath string, maxDepth, level int) {
 	defer d.Done()
 
-	d.logger.Info("Start scanning dir " + path)
-	list, err := d.fs.ReadDir(path)
+	d.logger.Info("Start scanning dir " + dirPath)
+	list, err := d.fs.ReadDir(dirPath)
 	if err != nil {
-		d.logger.Error("Can't read dir " + path)
+		d.logger.Error("Can't read dir " + dirPath)
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
 	for _, val := range list {
-		currPath := filepath.Join(path, val.Name())
+		currPath := filepath.Join(dirPath, val.Name())
 
 		if val.IsDir() {
 			if maxDepth <= 0 || level < maxDepth {
@@ -151,8 +151,9 @@ func (d *Duplicates) removeFileDuplicates(fileSetKey string) {
 
 // filterFiles фильтрует найденные файлы и сортирует дубликаты
 func (d *Duplicates) filterFiles() {
+	minFileFilter := 2
 	for ind, dFiles := range d.files {
-		if len(dFiles) < 2 {
+		if len(dFiles) < minFileFilter {
 			delete(d.files, ind)
 			continue
 		}

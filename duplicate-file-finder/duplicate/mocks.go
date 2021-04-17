@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// MockNotFileExistErr
-var MockNotFileExistErr = errors.New("no such file or directory")
+// ErrMockNotFileExist Ошибка для мока файловой системы, обозначающая несуществующую директорию или файл
+var ErrMockNotFileExist = errors.New("no such file or directory")
 
 // FileSystemStruct описывает структуру мока файловой системы
 type FileSystemStruct map[string]map[string]FileInfoMock
@@ -65,19 +65,19 @@ func (dr *FileSystemMock) ReadDir(path string) ([]os.FileInfo, error) {
 		return files, nil
 	}
 
-	return nil, fmt.Errorf("open %s: %w", path, MockNotFileExistErr)
+	return nil, fmt.Errorf("open %s: %w", path, ErrMockNotFileExist)
 }
 
 // Remove удаляет файл из FileSystemMock
 func (dr *FileSystemMock) Remove(path string) error {
 	dir := filepath.Dir(path)
 	if _, ok := dr.fileSystem[dir]; !ok {
-		return fmt.Errorf("open %s: %w", path, MockNotFileExistErr)
+		return fmt.Errorf("open %s: %w", path, ErrMockNotFileExist)
 	}
 
 	filename := filepath.Base(path)
 	if _, ok := dr.fileSystem[dir][filename]; !ok {
-		return fmt.Errorf("stat %s: %w", path, MockNotFileExistErr)
+		return fmt.Errorf("stat %s: %w", path, ErrMockNotFileExist)
 	}
 
 	delete(dr.fileSystem[dir], filename)

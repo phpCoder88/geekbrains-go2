@@ -32,48 +32,48 @@ func (s *MemoryDuplicatesTestSuite) SetupTest() {
 }
 
 func (s *MemoryDuplicatesTestSuite) TestDuplicatesSeek() {
-	for ind, tt := range tests {
+	for ind, tt := range FilesTestData {
 		if ind != 0 {
 			s.SetupTest()
 		}
 
-		s.T().Run(tt.name, func(t *testing.T) {
-			dFiles := s.finder.Seek(tt.startDir, tt.maxDepth)
-			assert.Equal(t, tt.wantResult, dFiles)
+		s.T().Run(tt.Name, func(t *testing.T) {
+			dFiles := s.finder.Seek(tt.StartDir, tt.MaxDepth)
+			assert.Equal(t, tt.WantResult, dFiles)
 		})
 	}
 }
 
 func (s *MemoryDuplicatesTestSuite) TestPrintDuplicates() {
-	for ind, tt := range tests {
+	for ind, tt := range FilesTestData {
 		if ind != 0 {
 			s.SetupTest()
 		}
 
-		s.T().Run(tt.name, func(t *testing.T) {
-			_ = s.finder.Seek(tt.startDir, tt.maxDepth)
+		s.T().Run(tt.Name, func(t *testing.T) {
+			_ = s.finder.Seek(tt.StartDir, tt.MaxDepth)
 
 			out := new(bytes.Buffer)
 			s.finder.PrintDuplicates(out)
 			result := out.String()
-			assert.Equal(t, tt.wantPrinted, result)
+			assert.Equal(t, tt.WantPrinted, result)
 		})
 	}
 }
 
 func (s *MemoryDuplicatesTestSuite) TestRemoveAllDuplicates() {
-	for ind, tt := range tests {
+	for ind, tt := range FilesTestData {
 		if ind != 0 {
 			s.SetupTest()
 		}
 
-		s.T().Run(tt.name, func(t *testing.T) {
-			_ = s.finder.Seek(tt.startDir, tt.maxDepth)
+		s.T().Run(tt.Name, func(t *testing.T) {
+			_ = s.finder.Seek(tt.StartDir, tt.MaxDepth)
 			mock := s.finder.fs.(*FileSystemMock)
 
 			s.finder.RemoveAllDuplicates()
 
-			for _, filePath := range tt.wantDeletedFiles {
+			for _, filePath := range tt.WantDeletedFiles {
 				dir := filepath.Dir(filePath)
 				filename := filepath.Base(filePath)
 				if _, fileExists := mock.fileSystem[dir][filename]; fileExists {
@@ -81,7 +81,7 @@ func (s *MemoryDuplicatesTestSuite) TestRemoveAllDuplicates() {
 				}
 			}
 
-			for _, filePath := range tt.wantPresentFiles {
+			for _, filePath := range tt.WantPresentFiles {
 				dir := filepath.Dir(filePath)
 				filename := filepath.Base(filePath)
 				if _, fileExists := mock.fileSystem[dir][filename]; !fileExists {
